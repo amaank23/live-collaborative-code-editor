@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Room {
+  id           String        @id
+  name         String?
+  createdAt    DateTime      @default(now())
+  lastActive   DateTime      @default(now())
+  files        File[]
+  chatMessages ChatMessage[]
+  yjsDocuments YjsDocument[]
+}
+
+model File {
+  id          String       @id @default(uuid())
+  roomId      String
+  name        String
+  language    String       @default("javascript")
+  createdAt   DateTime     @default(now())
+  room        Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  yjsDocument YjsDocument?
+
+  @@unique([roomId, name])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  roomId    String
+  username  String
+  content   String
+  createdAt DateTime @default(now())
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+}
+
+model YjsDocument {
+  id        String   @id @default(uuid())
+  roomId    String
+  fileId    String   @unique
+  snapshot  Bytes
+  updatedAt DateTime @default(now()) @updatedAt
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  file      File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+}
