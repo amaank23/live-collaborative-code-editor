@@ -5,7 +5,9 @@ import Modal from "../components/ui/Modal";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import ThemeToggle from "../components/ui/ThemeToggle";
+import CollaborativeEditor from "../components/editor/CollaborativeEditor";
 import { getColorForUsername, getInitials } from "../lib/colors";
+import { useYjs } from "../hooks/useYjs";
 import type { Room, UserSession } from "../types";
 
 const API = "http://localhost:3001";
@@ -38,18 +40,55 @@ export default function RoomPage() {
   const [usernameError, setUsernameError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Track dark mode for Monaco theme
+  const [isDark, setIsDark] = useState(
+    () => document.documentElement.classList.contains("dark")
+  );
+
+  // Listen for theme changes triggered by ThemeToggle
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  // Active file — Phase 6 will replace this with useFileSystem
+  const activeFileId = room?.files[0]?.id;
+  const activeLanguage = room?.files[0]?.language ?? "javascript";
+
+  // Y.js connection for the active file
+  const { yText, provider, status } = useYjs(
+    session ? roomId : undefined,
+    session ? activeFileId : undefined
+  );
+
   // Fetch room metadata
   useEffect(() => {
     if (!roomId) return;
     fetch(`${API}/api/rooms/${roomId}`)
       .then((res) => {
-        if (res.status === 404) { setNotFound(true); setLoading(false); return null; }
+        if (res.status === 404) {
+          setNotFound(true);
+          setLoading(false);
+          return null;
+        }
         return res.json();
       })
       .then((data) => {
-        if (data) { setRoom(data); setLoading(false); }
+        if (data) {
+          setRoom(data);
+          setLoading(false);
+        }
       })
-      .catch(() => { setNotFound(true); setLoading(false); });
+      .catch(() => {
+        setNotFound(true);
+        setLoading(false);
+      });
   }, [roomId]);
 
   // Show username modal once room is confirmed to exist
@@ -63,8 +102,14 @@ export default function RoomPage() {
   function handleSetUsername(e: React.FormEvent) {
     e.preventDefault();
     const name = usernameInput.trim();
-    if (!name) { setUsernameError("Please enter a username."); return; }
-    if (name.length > 24) { setUsernameError("Max 24 characters."); return; }
+    if (!name) {
+      setUsernameError("Please enter a username.");
+      return;
+    }
+    if (name.length > 24) {
+      setUsernameError("Max 24 characters.");
+      return;
+    }
     const newSession: UserSession = {
       username: name,
       clientId: nanoid(),
@@ -75,14 +120,33 @@ export default function RoomPage() {
     setShowUsernameModal(false);
   }
 
+  // Status dot color
+  const statusColor =
+    status === "connected"
+      ? "bg-green-500"
+      : status === "connecting"
+      ? "bg-yellow-500 animate-pulse"
+      : "bg-red-500";
+
   // Loading state
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
           <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v8H4z"
+            />
           </svg>
           Loading room…
         </div>
@@ -95,9 +159,15 @@ export default function RoomPage() {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="text-center space-y-3">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Room not found</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Room not found
+          </h1>
           <p className="text-gray-500 dark:text-gray-400">
-            The room <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">{roomId}</code> doesn't exist.
+            The room{" "}
+            <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">
+              {roomId}
+            </code>{" "}
+            doesn't exist.
           </p>
           <Button onClick={() => navigate("/")} variant="secondary">
             Go home
@@ -119,7 +189,10 @@ export default function RoomPage() {
             ref={inputRef}
             placeholder="e.g. Aman"
             value={usernameInput}
-            onChange={(e) => { setUsernameInput(e.target.value); setUsernameError(""); }}
+            onChange={(e) => {
+              setUsernameInput(e.target.value);
+              setUsernameError("");
+            }}
             error={usernameError}
             maxLength={24}
             autoComplete="off"
@@ -136,22 +209,41 @@ export default function RoomPage() {
           {/* Top toolbar */}
           <header className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
             <div className="flex items-center gap-3">
-              {/* Logo */}
-              <a href="/" className="flex items-center gap-1.5 text-gray-900 dark:text-gray-100">
+              <a
+                href="/"
+                className="flex items-center gap-1.5 text-gray-900 dark:text-gray-100"
+              >
                 <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  <svg
+                    className="w-3.5 h-3.5 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                    />
                   </svg>
                 </div>
                 <span className="font-semibold text-sm">CodeCollab</span>
               </a>
               <span className="text-gray-300 dark:text-gray-700">/</span>
-              <span className="text-sm font-mono text-gray-500 dark:text-gray-400">{roomId}</span>
+              <span className="text-sm font-mono text-gray-500 dark:text-gray-400">
+                {roomId}
+              </span>
+              {/* Connection status */}
+              <div className="flex items-center gap-1.5">
+                <div className={`w-2 h-2 rounded-full ${statusColor}`} />
+                <span className="text-xs text-gray-400 dark:text-gray-500 capitalize">
+                  {status}
+                </span>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Current user badge */}
               <div className="flex items-center gap-1.5">
                 <div
                   className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
@@ -159,7 +251,9 @@ export default function RoomPage() {
                 >
                   {getInitials(session.username)}
                 </div>
-                <span className="text-sm text-gray-700 dark:text-gray-300">{session.username}</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {session.username}
+                </span>
               </div>
               <ThemeToggle />
             </div>
@@ -179,18 +273,41 @@ export default function RoomPage() {
               </div>
             </aside>
 
-            {/* Editor area placeholder */}
+            {/* Editor */}
             <main className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-                <div className="text-center space-y-2">
-                  <p className="text-gray-400 dark:text-gray-600 text-sm">
-                    Monaco Editor + Y.js — Phase 4
-                  </p>
-                  <p className="text-xs text-gray-300 dark:text-gray-700 font-mono">
-                    room: {roomId}
-                  </p>
+              {yText && provider ? (
+                <CollaborativeEditor
+                  yText={yText}
+                  provider={provider}
+                  language={activeLanguage}
+                  isDark={isDark}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="flex items-center gap-2 text-gray-400 dark:text-gray-600 text-sm">
+                    <svg
+                      className="w-4 h-4 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v8H4z"
+                      />
+                    </svg>
+                    Connecting to room…
+                  </div>
                 </div>
-              </div>
+              )}
             </main>
 
             {/* Chat panel placeholder */}

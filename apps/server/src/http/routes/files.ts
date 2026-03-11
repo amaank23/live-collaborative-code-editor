@@ -1,10 +1,10 @@
-import { Router } from "express";
+import { Router, Request } from "express";
 import { prisma } from "../../db/prisma";
 
 const router = Router({ mergeParams: true });
 
 // GET /api/rooms/:roomId/files
-router.get("/", async (req, res) => {
+router.get("/", async (req: Request<{ roomId: string }>, res) => {
   try {
     const files = await prisma.file.findMany({
       where: { roomId: req.params.roomId },
