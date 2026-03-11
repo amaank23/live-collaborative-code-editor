@@ -6,11 +6,15 @@ import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import CollaborativeEditor from "../components/editor/CollaborativeEditor";
+import EditorToolbar from "../components/editor/EditorToolbar";
+import FileExplorer from "../components/sidebar/FileExplorer";
 import UserList from "../components/presence/UserList";
 import { getColorForUsername } from "../lib/colors";
 import { useYjs } from "../hooks/useYjs";
 import { useAwareness } from "../hooks/useAwareness";
-import type { Room, UserSession } from "../types";
+import { useFileSystem } from "../hooks/useFileSystem";
+import { getMonacoLanguage } from "../lib/languages";
+import type { UserSession } from "../types";
 
 const API = "http://localhost:3001";
 const SESSION_KEY = "collab_session";
@@ -32,9 +36,8 @@ export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
 
-  const [room, setRoom] = useState<Room | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const [roomExists, setRoomExists] = useState<boolean | null>(null); // null = loading
+  const [roomName, setRoomName] = useState<string | null>(null);
 
   const [session, setSession] = useState<UserSession | null>(getSession);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
@@ -47,7 +50,6 @@ export default function RoomPage() {
     () => document.documentElement.classList.contains("dark")
   );
 
-  // Listen for theme changes triggered by ThemeToggle
   useEffect(() => {
     const observer = new MutationObserver(() => {
       setIsDark(document.documentElement.classList.contains("dark"));
@@ -59,50 +61,56 @@ export default function RoomPage() {
     return () => observer.disconnect();
   }, []);
 
-  // Active file — Phase 6 will replace this with useFileSystem
-  const activeFileId = room?.files[0]?.id;
-  const activeLanguage = room?.files[0]?.language ?? "javascript";
-
-  // Y.js connection for the active file
-  const { yText, provider, status } = useYjs(
-    session ? roomId : undefined,
-    session ? activeFileId : undefined
-  );
-
-  // Awareness — sets local user info, injects cursor CSS, returns remote users
-  const { remoteUsers } = useAwareness(provider, session);
-
-  // Fetch room metadata
+  // Verify room exists
   useEffect(() => {
     if (!roomId) return;
     fetch(`${API}/api/rooms/${roomId}`)
       .then((res) => {
         if (res.status === 404) {
-          setNotFound(true);
-          setLoading(false);
+          setRoomExists(false);
           return null;
         }
         return res.json();
       })
       .then((data) => {
         if (data) {
-          setRoom(data);
-          setLoading(false);
+          setRoomExists(true);
+          setRoomName(data.name ?? null);
         }
       })
-      .catch(() => {
-        setNotFound(true);
-        setLoading(false);
-      });
+      .catch(() => setRoomExists(false));
   }, [roomId]);
+
+  // File system — CRDT-synced file manifest + REST CRUD
+  const {
+    files,
+    activeFileId,
+    setActiveFileId,
+    createFile,
+    deleteFile,
+    renameFile,
+    updateLanguage,
+  } = useFileSystem(session ? roomId : undefined);
+
+  const activeFile = files.find((f) => f.id === activeFileId);
+  const activeLanguage = getMonacoLanguage(activeFile?.language ?? "javascript");
+
+  // Y.js for the active file (re-connects when file switches)
+  const { yText, provider, status } = useYjs(
+    session ? roomId : undefined,
+    session ? (activeFileId ?? undefined) : undefined
+  );
+
+  // Awareness — sets local user info + tracks remote cursors
+  const { remoteUsers } = useAwareness(provider, session);
 
   // Show username modal once room is confirmed to exist
   useEffect(() => {
-    if (!loading && !notFound && !session) {
+    if (roomExists === true && !session) {
       setShowUsernameModal(true);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [loading, notFound, session]);
+  }, [roomExists, session]);
 
   function handleSetUsername(e: React.FormEvent) {
     e.preventDefault();
@@ -134,7 +142,7 @@ export default function RoomPage() {
       : "bg-red-500";
 
   // Loading state
-  if (loading) {
+  if (roomExists === null) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
@@ -160,7 +168,7 @@ export default function RoomPage() {
   }
 
   // 404 state
-  if (notFound) {
+  if (roomExists === false) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="text-center space-y-3">
@@ -237,7 +245,7 @@ export default function RoomPage() {
               </a>
               <span className="text-gray-300 dark:text-gray-700">/</span>
               <span className="text-sm font-mono text-gray-500 dark:text-gray-400">
-                {roomId}
+                {roomName ?? roomId}
               </span>
               {/* Connection status */}
               <div className="flex items-center gap-1.5">
@@ -256,20 +264,24 @@ export default function RoomPage() {
 
           {/* 3-column body */}
           <div className="flex flex-1 overflow-hidden">
-            {/* Sidebar — file explorer placeholder */}
+            {/* Sidebar — file explorer */}
             <aside className="w-52 shrink-0 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex flex-col">
-              <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-                Files
-              </div>
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-xs text-gray-400 dark:text-gray-600 text-center px-3">
-                  File explorer — Phase 6
-                </p>
-              </div>
+              <FileExplorer
+                files={files}
+                activeFileId={activeFileId}
+                onSelectFile={setActiveFileId}
+                onCreateFile={createFile}
+                onDeleteFile={deleteFile}
+                onRenameFile={renameFile}
+              />
             </aside>
 
             {/* Editor */}
             <main className="flex-1 flex flex-col overflow-hidden">
+              <EditorToolbar
+                file={activeFile}
+                onUpdateLanguage={updateLanguage}
+              />
               {yText && provider ? (
                 <CollaborativeEditor
                   yText={yText}

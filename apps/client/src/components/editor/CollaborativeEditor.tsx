@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import MonacoEditor from "@monaco-editor/react";
 import type { OnMount } from "@monaco-editor/react";
 import * as Y from "yjs";
@@ -21,28 +21,32 @@ export default function CollaborativeEditor({
 }: CollaborativeEditorProps) {
   const bindingRef = useRef<MonacoBinding | null>(null);
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
+  // Incremented when the Monaco editor mounts, to trigger the binding effect
+  const [editorReady, setEditorReady] = useState(0);
 
-  // Destroy binding when yText changes (file switch in Phase 6)
+  // Recreate the MonacoBinding whenever yText, provider, or the editor changes
   useEffect(() => {
-    return () => {
-      bindingRef.current?.destroy();
-      bindingRef.current = null;
-    };
-  }, [yText]);
+    const editor = editorRef.current;
+    if (!editor || !yText || !provider) return;
 
-  const handleMount: OnMount = (editor) => {
-    editorRef.current = editor;
-
-    // Destroy any previous binding first
     bindingRef.current?.destroy();
-
-    // Bind Y.Text to the Monaco model
     bindingRef.current = new MonacoBinding(
       yText,
       editor.getModel()!,
       new Set([editor]),
       provider.awareness
     );
+
+    return () => {
+      bindingRef.current?.destroy();
+      bindingRef.current = null;
+    };
+  }, [yText, provider, editorReady]);
+
+  const handleMount: OnMount = (editor) => {
+    editorRef.current = editor;
+    // Signal that the editor is ready — triggers the binding effect
+    setEditorReady((n) => n + 1);
   };
 
   return (

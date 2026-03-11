@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { createProvider } from "../lib/yjsProvider";
@@ -6,7 +6,6 @@ import { createProvider } from "../lib/yjsProvider";
 export type SyncStatus = "connecting" | "connected" | "disconnected";
 
 export interface UseYjsResult {
-  ydoc: Y.Doc | null;
   yText: Y.Text | null;
   provider: WebsocketProvider | null;
   status: SyncStatus;
@@ -14,31 +13,29 @@ export interface UseYjsResult {
 
 /**
  * Sets up a Y.Doc and WebsocketProvider for a specific file in a room.
- * Cleans up (destroys provider + doc) when roomId/fileId changes or component unmounts.
+ * Uses React state (not refs) so yText/provider are always consistent with fileId.
  */
 export function useYjs(
   roomId: string | undefined,
   fileId: string | undefined
 ): UseYjsResult {
+  const [yText, setYText] = useState<Y.Text | null>(null);
+  const [provider, setProvider] = useState<WebsocketProvider | null>(null);
   const [status, setStatus] = useState<SyncStatus>("connecting");
 
-  // Use refs so Monaco binding callbacks always have fresh references
-  const ydocRef = useRef<Y.Doc | null>(null);
-  const providerRef = useRef<WebsocketProvider | null>(null);
-  const [, forceRender] = useState(0);
-
   useEffect(() => {
-    if (!roomId || !fileId) return;
+    if (!roomId || !fileId) {
+      setYText(null);
+      setProvider(null);
+      setStatus("connecting");
+      return;
+    }
 
-    const docName = `room:${roomId}:file:${fileId}`;
     const ydoc = new Y.Doc();
-    const provider = createProvider(docName, ydoc);
+    const prov = createProvider(`room:${roomId}:file:${fileId}`, ydoc);
+    const text = ydoc.getText("content");
 
-    ydocRef.current = ydoc;
-    providerRef.current = provider;
-    forceRender((n) => n + 1);
-
-    provider.on("status", ({ status }: { status: string }) => {
+    prov.on("status", ({ status }: { status: string }) => {
       setStatus(
         status === "connected"
           ? "connected"
@@ -48,21 +45,17 @@ export function useYjs(
       );
     });
 
+    // Both setters are batched in React 18 — one render with correct values
+    setYText(text);
+    setProvider(prov);
+    setStatus("connecting");
+
     return () => {
-      // Null out awareness before destroying to signal this client left
-      provider.awareness.setLocalState(null);
-      provider.destroy();
+      prov.awareness.setLocalState(null);
+      prov.destroy();
       ydoc.destroy();
-      ydocRef.current = null;
-      providerRef.current = null;
-      setStatus("connecting");
     };
   }, [roomId, fileId]);
 
-  return {
-    ydoc: ydocRef.current,
-    yText: ydocRef.current?.getText("content") ?? null,
-    provider: providerRef.current,
-    status,
-  };
+  return { yText, provider, status };
 }
