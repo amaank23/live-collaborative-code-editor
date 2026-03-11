@@ -6,8 +6,10 @@ import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import CollaborativeEditor from "../components/editor/CollaborativeEditor";
-import { getColorForUsername, getInitials } from "../lib/colors";
+import UserList from "../components/presence/UserList";
+import { getColorForUsername } from "../lib/colors";
 import { useYjs } from "../hooks/useYjs";
+import { useAwareness } from "../hooks/useAwareness";
 import type { Room, UserSession } from "../types";
 
 const API = "http://localhost:3001";
@@ -66,6 +68,9 @@ export default function RoomPage() {
     session ? roomId : undefined,
     session ? activeFileId : undefined
   );
+
+  // Awareness — sets local user info, injects cursor CSS, returns remote users
+  const { remoteUsers } = useAwareness(provider, session);
 
   // Fetch room metadata
   useEffect(() => {
@@ -243,18 +248,8 @@ export default function RoomPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5">
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                  style={{ backgroundColor: session.color }}
-                >
-                  {getInitials(session.username)}
-                </div>
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  {session.username}
-                </span>
-              </div>
+            <div className="flex items-center gap-3">
+              <UserList session={session} remoteUsers={remoteUsers} />
               <ThemeToggle />
             </div>
           </header>
