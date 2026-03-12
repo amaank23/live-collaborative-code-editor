@@ -47,6 +47,16 @@ export default function RoomPage() {
   const [usernameError, setUsernameError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  function copyLink() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   // Track dark mode for Monaco theme
   const [isDark, setIsDark] = useState(
     () => document.documentElement.classList.contains("dark")
@@ -265,6 +275,27 @@ export default function RoomPage() {
             </div>
 
             <div className="flex items-center gap-3">
+              <button
+                onClick={copyLink}
+                title="Copy room link"
+                className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+              >
+                {copied ? (
+                  <>
+                    <svg className="w-3.5 h-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-green-500">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    Share
+                  </>
+                )}
+              </button>
               <UserList session={session} remoteUsers={remoteUsers} />
               <ThemeToggle />
             </div>
@@ -273,21 +304,25 @@ export default function RoomPage() {
           {/* 3-column body */}
           <div className="flex flex-1 overflow-hidden">
             {/* Sidebar — file explorer */}
-            <aside className="w-52 shrink-0 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex flex-col">
-              <FileExplorer
-                files={files}
-                activeFileId={activeFileId}
-                onSelectFile={setActiveFileId}
-                onCreateFile={createFile}
-                onDeleteFile={deleteFile}
-                onRenameFile={renameFile}
-              />
-            </aside>
+            {sidebarOpen && (
+              <aside className="w-52 shrink-0 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex flex-col">
+                <FileExplorer
+                  files={files}
+                  activeFileId={activeFileId}
+                  onSelectFile={setActiveFileId}
+                  onCreateFile={createFile}
+                  onDeleteFile={deleteFile}
+                  onRenameFile={renameFile}
+                />
+              </aside>
+            )}
 
             {/* Editor */}
             <main className="flex-1 flex flex-col overflow-hidden">
               <EditorToolbar
                 file={activeFile}
+                sidebarOpen={sidebarOpen}
+                onToggleSidebar={() => setSidebarOpen((o) => !o)}
                 onUpdateLanguage={updateLanguage}
               />
               {yText && provider ? (

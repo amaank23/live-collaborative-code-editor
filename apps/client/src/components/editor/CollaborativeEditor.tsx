@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import MonacoEditor from "@monaco-editor/react";
+import MonacoEditor, { useMonaco } from "@monaco-editor/react";
 import type { OnMount } from "@monaco-editor/react";
 import * as Y from "yjs";
 import { MonacoBinding } from "y-monaco";
@@ -19,17 +19,20 @@ export default function CollaborativeEditor({
   language,
   isDark,
 }: CollaborativeEditorProps) {
+  const monaco = useMonaco();
   const bindingRef = useRef<MonacoBinding | null>(null);
+  const undoManagerRef = useRef<Y.UndoManager | null>(null);
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
-  // Incremented when the Monaco editor mounts, to trigger the binding effect
   const [editorReady, setEditorReady] = useState(0);
 
-  // Recreate the MonacoBinding whenever yText, provider, or the editor changes
+  // Recreate MonacoBinding + UndoManager whenever yText, provider, editor, or monaco changes
   useEffect(() => {
     const editor = editorRef.current;
-    if (!editor || !yText || !provider) return;
+    if (!editor || !yText || !provider || !monaco) return;
 
     bindingRef.current?.destroy();
+    undoManagerRef.current?.destroy();
+
     bindingRef.current = new MonacoBinding(
       yText,
       editor.getModel()!,
@@ -37,11 +40,35 @@ export default function CollaborativeEditor({
       provider.awareness
     );
 
+    // trackedOrigins must include the MonacoBinding instance because
+    // MonacoBinding uses itself as the Y.js transaction origin — without this
+    // the UndoManager ignores all local keystrokes and has nothing to undo.
+    const undoManager = new Y.UndoManager(yText, {
+      trackedOrigins: new Set([bindingRef.current]),
+    });
+    undoManagerRef.current = undoManager;
+
+    // Override Monaco's built-in Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z.
+    // Use the ref so the closure always calls the current manager even after
+    // the effect re-runs on file switches.
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ, () =>
+      undoManagerRef.current?.undo()
+    );
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyY, () =>
+      undoManagerRef.current?.redo()
+    );
+    editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyZ,
+      () => undoManagerRef.current?.redo()
+    );
+
     return () => {
       bindingRef.current?.destroy();
       bindingRef.current = null;
+      undoManagerRef.current?.destroy();
+      undoManagerRef.current = null;
     };
-  }, [yText, provider, editorReady]);
+  }, [yText, provider, editorReady, monaco]);
 
   const handleMount: OnMount = (editor) => {
     editorRef.current = editor;
