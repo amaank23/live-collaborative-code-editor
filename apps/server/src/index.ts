@@ -2,6 +2,7 @@ import http from "http";
 import { config } from "./config";
 import { createApp } from "./http/app";
 import { createYjsServer } from "./ws/yjsHandler";
+import { createChatServer } from "./ws/chatServer";
 import { initPersistence, flushAll } from "./persistence/yjsPersistence";
 
 // Initialize Y.js PostgreSQL persistence before any docs are created
@@ -12,6 +13,8 @@ const server = http.createServer(app);
 
 // Attach Y.js WebSocket server (shares same HTTP port as REST API)
 createYjsServer(server);
+// Attach chat WebSocket server at /ws
+createChatServer(server);
 
 server.listen(config.PORT, () => {
   console.log(`🚀 Server running on http://localhost:${config.PORT}`);

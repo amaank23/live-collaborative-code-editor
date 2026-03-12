@@ -8,11 +8,13 @@ import ThemeToggle from "../components/ui/ThemeToggle";
 import CollaborativeEditor from "../components/editor/CollaborativeEditor";
 import EditorToolbar from "../components/editor/EditorToolbar";
 import FileExplorer from "../components/sidebar/FileExplorer";
+import ChatPanel from "../components/chat/ChatPanel";
 import UserList from "../components/presence/UserList";
 import { getColorForUsername } from "../lib/colors";
 import { useYjs } from "../hooks/useYjs";
 import { useAwareness } from "../hooks/useAwareness";
 import { useFileSystem } from "../hooks/useFileSystem";
+import { useChat } from "../hooks/useChat";
 import { getMonacoLanguage } from "../lib/languages";
 import type { UserSession } from "../types";
 
@@ -101,8 +103,14 @@ export default function RoomPage() {
     session ? (activeFileId ?? undefined) : undefined
   );
 
-  // Awareness — sets local user info + tracks remote cursors
+  // Awareness — sets local user info + tracks remote cursors for user list
   const { remoteUsers } = useAwareness(provider, session);
+
+  // Chat WS — messages + room user colors (for chat bubbles)
+  const { messages, connectedUsers, sendMessage } = useChat(
+    session ? roomId : undefined,
+    session
+  );
 
   // Show username modal once room is confirmed to exist
   useEffect(() => {
@@ -317,16 +325,14 @@ export default function RoomPage() {
               )}
             </main>
 
-            {/* Chat panel placeholder */}
+            {/* Chat panel */}
             <aside className="w-72 shrink-0 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex flex-col">
-              <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-                Chat
-              </div>
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-xs text-gray-400 dark:text-gray-600 text-center px-3">
-                  Chat panel — Phase 7
-                </p>
-              </div>
+              <ChatPanel
+                messages={messages}
+                session={session}
+                connectedUsers={connectedUsers}
+                onSendMessage={sendMessage}
+              />
             </aside>
           </div>
         </div>

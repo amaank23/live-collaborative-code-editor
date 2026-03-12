@@ -27,3 +27,9 @@ export interface UserSession {
   clientId: string;
   color: string;
 }
+
+export interface RoomUser {
+  username: string;
+  color: string;
+  clientId: string;
+}

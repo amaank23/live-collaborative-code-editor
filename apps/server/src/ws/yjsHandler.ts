@@ -33,10 +33,8 @@ export function createYjsServer(httpServer: HttpServer): void {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit("connection", ws, request);
       });
-    } else {
-      // Other upgrade paths (e.g. Phase 7 chat WS) will be added here
-      socket.destroy();
     }
+    // Non-/yjs/ paths (e.g. /ws for chat) are handled by other upgrade listeners
   });
 
   console.log("[ws] Y.js WebSocket server attached");
